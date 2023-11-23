@@ -1,0 +1,121 @@
+namespace: go-chat
+
+rabbitmq:
+  defines: runnable
+  inherits: rabbitmq/rabbitmq
+  metadata:
+    name: rabbitmq
+    description: >-
+      Message broker service used for communication between the chat service and
+      the stock bot service.
+    icon: https://www.vectorlogo.zone/logos/rabbitmq/rabbitmq-ar21.png
+  variables:
+    RABBITMQ_ADVANCED_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/advanced.config
+      description: ''
+    RABBITMQ_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq.conf
+      description: ''
+    RABBITMQ_CONF_ENV_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq-env.conf
+      description: ''
+    rabbitmq-image:
+      type: string
+      value: $rabbitmq-image-tag default("3.10-management")
+      description: ''
+
+mysql:
+  defines: runnable
+  inherits: monk-mysql/db
+  metadata:
+    name: mysql
+    description: Database service used for persisting application data.
+    icon: https://labs.mysql.com/common/logos/mysql-logo.svg?v2
+  variables:
+    image_tag:
+      type: string
+      value: latest
+      description: ''
+    monk_mysql_database:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_root_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_user:
+      type: string
+      value: monk
+      description: ''
+
+go-chat-service:
+  defines: runnable
+  metadata:
+    name: go-chat-service
+    description: >-
+      Main backend service for the chat application, handling RESTful API and
+      WebSocket connections.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    go-chat-service:
+      image: env-2534.registry.local/go-chat-service:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile
+  services:
+    go-chat-service-port:
+      description: >-
+        Port exposed by the go-chat-service for RESTful API and WebSocket
+        connections
+      container: go-chat-service
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+  connections:
+    rabbitmq-connection:
+      target: go-chat/rabbitmq
+      service: rabbitmq-amqp-1
+    database-connection:
+      target: go-chat/mysql
+      service: monk-mysql-db
+  variables:
+    stkbt-receiver-queue:
+      env: STKBT_RECEIVER_QUEUE
+      type: string
+      value: stock_bot_requests
+      description: Environment variable for the queue to receive stock bot requests
+    stkbt-publisher-queue:
+      env: STKBT_PUBLISHER_QUEUE
+      type: string
+      value: stock_bot_responses
+      description: Environment variable for the queue to publish processed stock responses
+    log-to-file:
+      env: LOG_TO_FILE
+      type: bool
+      value: 'false'
+      description: Environment variable to determine if logs should be written to a file
+    jwt-secret:
+      env: JWT_SECRET
+      type: string
+      value: supersecretkey
+      description: Secret key for JWT authentication
+    port:
+      env: PORT
+      type: int
+      value: 9010
+      description: Port on which the go-chat-service will run
+
+stack:
+  defines: group
+  members:
+    - go-chat/rabbitmq
+    - go-chat/mysql
+    - go-chat/go-chat-service
