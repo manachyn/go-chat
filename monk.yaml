@@ -1,0 +1,148 @@
+namespace: go-chat
+
+rabbitmq:
+  defines: runnable
+  inherits: rabbitmq/rabbitmq
+  metadata:
+    name: rabbitmq
+    description: >-
+      Message broker service used for communication between the chat service and
+      the stock bot service.
+    icon: https://www.vectorlogo.zone/logos/rabbitmq/rabbitmq-ar21.png
+  variables:
+    RABBITMQ_ADVANCED_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/advanced.config
+      description: ''
+    RABBITMQ_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq.conf
+      description: ''
+    RABBITMQ_CONF_ENV_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq-env.conf
+      description: ''
+    rabbitmq-image:
+      type: string
+      value: $rabbitmq-image-tag default("3.10-management")
+      description: ''
+
+mysql:
+  defines: runnable
+  inherits: monk-mysql/db
+  metadata:
+    name: mysql
+    description: Database service used for storing user and chat data.
+    icon: https://labs.mysql.com/common/logos/mysql-logo.svg?v2
+  variables:
+    image_tag:
+      type: string
+      value: latest
+      description: ''
+    monk_mysql_database:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_root_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_user:
+      type: string
+      value: monk
+      description: ''
+
+go-chat-backend:
+  defines: runnable
+  metadata:
+    name: go-chat-backend
+    description: Backend service for the realtime finance chat application.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    go-chat-backend:
+      image: env-2029.registry.local/go-chat-backend:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile
+  services:
+    go-chat-backend-http:
+      description: HTTP port for the go-chat-backend service
+      container: go-chat-backend
+      port: 9010
+      host-port: 9010
+      publish: true
+      protocol: tcp
+  connections:
+    mysql-database-connection:
+      target: go-chat/mysql
+      service: monk-mysql-db
+      optional: true
+      description: Connection to the MySQL database service for storing user and chat data
+    rabbitmq-message-broker-connection:
+      target: go-chat/rabbitmq
+      service: rabbitmq-amqp-1
+      optional: true
+      description: >-
+        Connection to the RabbitMQ message broker service for communication
+        between the chat service and the stock bot service
+  variables:
+    db-username:
+      env: DB_USERNAME
+      type: string
+      value: monk
+      description: Username for the database connection
+    db-password:
+      env: DB_PASSWORD
+      type: string
+      value: monk
+      description: Password for the database connection
+    db-protocol:
+      env: DB_PROTOCOL
+      type: string
+      value: tcp
+      description: Protocol for the database connection
+    db-host:
+      env: DB_HOST
+      type: string
+      value: <- connection-hostname("mysql-database-connection")
+      description: Host for the database connection
+    db-port:
+      env: DB_PORT
+      type: int
+      value: <- connection-port("mysql-database-connection")
+      description: Port for the database connection
+    db-database:
+      env: DB_DATABASE
+      type: string
+      value: monk
+      description: Database name for the database connection
+    rmq-host:
+      env: RMQ_HOST
+      type: string
+      value: <- connection-hostname("rabbitmq-message-broker-connection")
+      description: Host for the RabbitMQ connection
+    rmq-username:
+      env: RMQ_USERNAME
+      type: string
+      value: guest
+      description: Username for the RabbitMQ connection
+    rmq-password:
+      env: RMQ_PASSWORD
+      type: string
+      value: guest
+      description: Password for the RabbitMQ connection
+    rmq-port:
+      env: RMQ_PORT
+      type: int
+      value: <- connection-port("rabbitmq-message-broker-connection")
+      description: Port for the RabbitMQ connection
+
+stack:
+  defines: group
+  members:
+    - go-chat/rabbitmq
+    - go-chat/mysql
+    - go-chat/go-chat-backend
