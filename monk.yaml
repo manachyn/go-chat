@@ -1,0 +1,164 @@
+namespace: go-chat
+
+mysql:
+  defines: runnable
+  inherits: monk-mysql/db
+  metadata:
+    name: mysql
+    description: MySQL database service for data persistence.
+    icon: https://labs.mysql.com/common/logos/mysql-logo.svg?v2
+  variables:
+    image_tag:
+      type: string
+      value: latest
+      description: ''
+    monk_mysql_database:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_root_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_user:
+      type: string
+      value: monk
+      description: ''
+
+rabbitmq:
+  defines: runnable
+  inherits: rabbitmq/rabbitmq
+  metadata:
+    name: rabbitmq
+    description: RabbitMQ service for messaging and integration.
+    icon: https://www.vectorlogo.zone/logos/rabbitmq/rabbitmq-ar21.png
+  variables:
+    RABBITMQ_ADVANCED_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/advanced.config
+      description: ''
+    RABBITMQ_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq.conf
+      description: ''
+    RABBITMQ_CONF_ENV_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq-env.conf
+      description: ''
+    rabbitmq-image:
+      type: string
+      value: $rabbitmq-image-tag default("3.10-management")
+      description: ''
+
+backend:
+  defines: runnable
+  metadata:
+    name: backend
+    description: Main backend service for chat and stock quote functionality.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    backend:
+      image: env-2029.registry.local/backend:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile
+  services:
+    http-server:
+      description: HTTP server listening for incoming requests
+      container: backend
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+  connections:
+    database-connection:
+      target: go-chat/mysql
+      service: monk-mysql-db
+      optional: true
+      description: Connection to the MySQL database service for data persistence
+    rabbitmq-connection:
+      target: go-chat/rabbitmq
+      service: rabbitmq-amqp-1
+      optional: true
+      description: Connection to the RabbitMQ service for messaging and integration
+  variables:
+    db-username:
+      env: DB_USERNAME
+      type: string
+      value: monk
+      description: Username for the database connection
+    db-password:
+      env: DB_PASSWORD
+      type: string
+      value: monk
+      description: Password for the database connection
+    db-protocol:
+      env: DB_PROTOCOL
+      type: string
+      value: mysql
+      description: Protocol for the database connection
+    db-host:
+      env: DB_HOST
+      type: string
+      value: <- connection-hostname("database-connection")
+      description: Host for the database connection
+    db-port:
+      env: DB_PORT
+      type: int
+      value: <- connection-port("database-connection")
+      description: Port for the database connection
+    db-database:
+      env: DB_DATABASE
+      type: string
+      value: monk
+      description: Database name for the database connection
+    rmq-host:
+      env: RMQ_HOST
+      type: string
+      value: <- connection-hostname("rabbitmq-connection")
+      description: Host for the RabbitMQ connection
+    rmq-username:
+      env: RMQ_USERNAME
+      type: string
+      value: guest
+      description: Username for the RabbitMQ connection
+    rmq-password:
+      env: RMQ_PASSWORD
+      type: string
+      value: guest
+      description: Password for the RabbitMQ connection
+    rmq-port:
+      env: RMQ_PORT
+      type: int
+      value: <- connection-port("rabbitmq-connection")
+      description: Port for the RabbitMQ connection
+    jwt-ttl:
+      env: JWT_TTL
+      type: int
+      value: 3600
+      description: Time to live for JWT tokens
+    jwt-secret:
+      env: JWT_SECRET
+      type: string
+      value: verySecretKey
+      description: Secret key for signing JWT tokens
+    port:
+      env: PORT
+      type: int
+      value: 8080
+      description: Port on which the HTTP server listens
+    log-to-file:
+      env: LOG_TO_FILE
+      type: bool
+      value: 'false'
+      description: Flag to determine if logs should be written to a file
+
+stack:
+  defines: group
+  members:
+    - go-chat/mysql
+    - go-chat/rabbitmq
+    - go-chat/backend
