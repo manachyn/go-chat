@@ -1,0 +1,109 @@
+namespace: go-chat
+
+rabbitmq:
+  defines: runnable
+  inherits: rabbitmq/rabbitmq
+  metadata:
+    name: rabbitmq
+    description: RabbitMQ message broker service
+    icon: https://www.vectorlogo.zone/logos/rabbitmq/rabbitmq-ar21.png
+  variables:
+    RABBITMQ_ADVANCED_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/advanced.config
+      description: ''
+    RABBITMQ_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq.conf
+      description: ''
+    RABBITMQ_CONF_ENV_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq-env.conf
+      description: ''
+    rabbitmq-image:
+      type: string
+      value: $rabbitmq-image-tag default("3.10-management")
+      description: ''
+
+mysql:
+  defines: runnable
+  inherits: monk-mysql/db
+  metadata:
+    name: mysql
+    description: MySQL database service
+    icon: https://labs.mysql.com/common/logos/mysql-logo.svg?v2
+  variables:
+    image_tag:
+      type: string
+      value: latest
+      description: ''
+    monk_mysql_database:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_root_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_user:
+      type: string
+      value: monk
+      description: ''
+
+chat-service:
+  defines: runnable
+  metadata:
+    name: chat-service
+    description: Go-based microservice for a chat application
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    chat-service:
+      image: env-3057.registry.local/chat-service:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile
+  services:
+    http-service:
+      description: HTTP server for chat-service
+      container: chat-service
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+  connections:
+    rabbitmq-connection:
+      target: go-chat/rabbitmq
+      service: rabbitmq-amqp-1
+      optional: true
+      description: Connection to RabbitMQ message broker
+    mysql-connection:
+      target: go-chat/mysql
+      service: monk-mysql-db
+      optional: true
+      description: Connection to MySQL database
+  variables:
+    log-to-file:
+      env: LOG_TO_FILE
+      type: bool
+      value: false
+      description: Flag to determine if logs should be written to a file
+    jwt-secret:
+      env: JWT_SECRET
+      type: string
+      value: placeholder-secret
+      description: Secret key for JWT authentication
+    port:
+      env: PORT
+      type: string
+      value: 9010
+      description: Port on which the chat-service will run
+
+stack:
+  defines: group
+  members:
+    - go-chat/rabbitmq
+    - go-chat/mysql
+    - go-chat/chat-service
