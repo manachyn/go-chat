@@ -1,0 +1,184 @@
+namespace: go-chat
+
+rabbitmq:
+  defines: runnable
+  inherits: rabbitmq/rabbitmq
+  metadata:
+    name: rabbitmq
+    description: Message broker service used by the backend for message queuing.
+    icon: https://www.vectorlogo.zone/logos/rabbitmq/rabbitmq-ar21.png
+  variables:
+    RABBITMQ_ADVANCED_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/advanced.config
+      description: ''
+    RABBITMQ_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq.conf
+      description: ''
+    RABBITMQ_CONF_ENV_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq-env.conf
+      description: ''
+    rabbitmq-image:
+      type: string
+      value: 3.10-management
+      description: ''
+
+mysql:
+  defines: runnable
+  inherits: monk-mysql/db
+  metadata:
+    name: mysql
+    description: Database service used by the backend for data persistence.
+    icon: https://labs.mysql.com/common/logos/mysql-logo.svg?v2
+  variables:
+    image_tag:
+      type: string
+      value: latest
+      description: ''
+    monk_mysql_database:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_root_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_user:
+      type: string
+      value: monk
+      description: ''
+
+gochatapp-backend:
+  defines: runnable
+  metadata:
+    name: gochatapp-backend
+    description: Backend service for a real-time finance chat application.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    gochatapp-backend:
+      image: env-2135.registry.local/gochatapp-backend:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile
+  services:
+    http-service-port:
+      description: Port for HTTP server to handle incoming requests
+      container: gochatapp-backend
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+  connections:
+    rabbitmq-connection:
+      target: go-chat/rabbitmq
+      service: rabbitmq-amqp-1
+      optional: true
+      description: Connection to RabbitMQ for message queuing
+    mysql-database-connection:
+      target: go-chat/mysql
+      service: monk-mysql-db
+      optional: true
+      description: Connection to MySQL for data persistence
+  variables:
+    stkbt-receiver-queue:
+      env: STKBT_RECEIVER_QUEUE
+      type: string
+      value: stock_bot_receiver
+      description: Name of the queue for receiving messages from stock bot
+    stkbt-publisher-queue:
+      env: STKBT_PUBLISHER_QUEUE
+      type: string
+      value: stock_bot_publisher
+      description: Name of the queue for publishing messages to stock bot
+    rmq-host:
+      env: RMQ_HOST
+      type: string
+      value: <- connection-hostname("rabbitmq-connection")
+      description: Hostname for RabbitMQ service
+    rmq-username:
+      env: RMQ_USERNAME
+      type: string
+      value: user
+      description: Username for RabbitMQ service
+    rmq-password:
+      env: RMQ_PASSWORD
+      type: string
+      value: password
+      description: Password for RabbitMQ service
+    rmq-port:
+      env: RMQ_PORT
+      type: int
+      value: <- connection-port("rabbitmq-connection")
+      description: Port for RabbitMQ service
+    jwt-ttl:
+      env: JWT_TTL
+      type: int
+      value: 3600
+      description: Time to live for JWT tokens
+    jwt-secret:
+      env: JWT_SECRET
+      type: string
+      value: supersecretkey
+      description: Secret key for signing JWT tokens
+    log-panic-trace:
+      env: LOG_PANIC_TRACE
+      type: bool
+      value: true
+      description: Flag to enable panic stack trace logging
+    cors-debug:
+      env: CORS_DEBUG
+      type: bool
+      value: false
+      description: Flag to enable CORS debug mode
+    db-username:
+      env: DB_USERNAME
+      type: string
+      value: monk
+      description: Username for database connection
+    db-password:
+      env: DB_PASSWORD
+      type: string
+      value: monk
+      description: Password for database connection
+    db-protocol:
+      env: DB_PROTOCOL
+      type: string
+      value: tcp
+      description: Protocol for database connection
+    db-host:
+      env: DB_HOST
+      type: string
+      value: <- connection-hostname("mysql-database-connection")
+      description: Hostname for database connection
+    db-port:
+      env: DB_PORT
+      type: int
+      value: <- connection-port("mysql-database-connection")
+      description: Port for database connection
+    db-database:
+      env: DB_DATABASE
+      type: string
+      value: monk
+      description: Database name for database connection
+    log-to-file:
+      env: LOG_TO_FILE
+      type: bool
+      value: true
+      description: Flag to enable logging to a file
+    port:
+      env: PORT
+      type: int
+      value: 9010
+      description: Port on which the service runs
+
+stack:
+  defines: group
+  members:
+    - go-chat/rabbitmq
+    - go-chat/mysql
+    - go-chat/gochatapp-backend
