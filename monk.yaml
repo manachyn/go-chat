@@ -1,0 +1,229 @@
+namespace: go-chat
+
+rabbitmq-broker:
+  defines: runnable
+  inherits: rabbitmq/rabbitmq
+  metadata:
+    name: rabbitmq-broker
+    description: RabbitMQ broker service for message queuing.
+    icon: https://www.vectorlogo.zone/logos/rabbitmq/rabbitmq-ar21.png
+  variables:
+    RABBITMQ_ADVANCED_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/advanced.config
+      description: ''
+    RABBITMQ_CONFIG_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq.conf
+      description: ''
+    RABBITMQ_CONF_ENV_FILE:
+      type: string
+      value: /etc/rabbitmq/rabbitmq-env.conf
+      description: ''
+    rabbitmq-image:
+      type: string
+      value: 3.10-management
+      description: ''
+
+mysql-database:
+  defines: runnable
+  inherits: monk-mysql/db
+  metadata:
+    name: mysql-database
+    description: MySQL database required by the chat service.
+    icon: https://labs.mysql.com/common/logos/mysql-logo.svg?v2
+  variables:
+    image_tag:
+      type: string
+      value: latest
+      description: ''
+    monk_mysql_database:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_root_password:
+      type: string
+      value: monk
+      description: ''
+    monk_mysql_user:
+      type: string
+      value: monk
+      description: ''
+
+chat-service:
+  defines: runnable
+  metadata:
+    name: chat-service
+    description: Main chat service of the realtime finance chat application.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    chat-service:
+      image: env-4291.registry.local/chat-service:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile
+  services:
+    chat-service-port:
+      description: Port for the main chat service
+      container: chat-service
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+  connections:
+    database-connection:
+      target: go-chat/mysql-database
+      service: monk-mysql-db
+      optional: true
+      description: Connection to the MySQL database
+    rabbitmq-connection:
+      target: go-chat/rabbitmq-broker
+      service: rabbitmq-amqp-1
+      optional: true
+      description: Connection to the RabbitMQ message broker
+    websocket-connection:
+      target: go-chat/websocket-service
+      service: websocket-service-port
+      optional: true
+      description: Connection to the WebSocket service for real-time communication
+  variables:
+    port:
+      env: PORT
+      type: int
+      value: 9010
+      description: Port on which the chat service runs
+    db-connection:
+      env: DB_CONNECTION
+      type: string
+      value: mysql
+      description: Database connection type
+    db-host:
+      env: DB_HOST
+      type: string
+      value: <- connection-hostname("database-connection")
+      description: Database host
+    db-port:
+      env: DB_PORT
+      type: int
+      value: <- connection-port("database-connection")
+      description: Database port
+    db-database:
+      env: DB_DATABASE
+      type: string
+      value: jobcity_go_chat_test
+      description: Database name
+    db-username:
+      env: DB_USERNAME
+      type: string
+      value: root
+      description: Database username
+    db-password:
+      env: DB_PASSWORD
+      type: string
+      value: password
+      description: Database password
+    db-protocol:
+      env: DB_PROTOCOL
+      type: string
+      value: tcp
+      description: Database protocol
+    jwt-secret:
+      env: JWT_SECRET
+      type: string
+      value: someSecretContent
+      description: JWT secret key
+    jwt-ttl:
+      env: JWT_TTL
+      type: int
+      value: 2
+      description: JWT time to live
+    log-to-file:
+      env: LOG_TO_FILE
+      type: bool
+      value: true
+      description: Flag to enable logging to file
+    log-panic-trace:
+      env: LOG_PANIC_TRACE
+      type: bool
+      value: true
+      description: Flag to enable panic trace logging
+    cors-debug:
+      env: CORS_DEBUG
+      type: bool
+      value: false
+      description: Flag to enable CORS debug
+    rmq-username:
+      env: RMQ_USERNAME
+      type: string
+      value: guest
+      description: RabbitMQ username
+    rmq-password:
+      env: RMQ_PASSWORD
+      type: string
+      value: guest
+      description: RabbitMQ password
+    rmq-host:
+      env: RMQ_HOST
+      type: string
+      value: <- connection-hostname("rabbitmq-connection")
+      description: RabbitMQ host
+    rmq-port:
+      env: RMQ_PORT
+      type: int
+      value: <- connection-port("rabbitmq-connection")
+      description: RabbitMQ port
+    stkbt-receiver-queue:
+      env: STKBT_RECEIVER_QUEUE
+      type: string
+      value: stockbot-publisher
+      description: Stockbot receiver queue name
+    stkbt-publisher-queue:
+      env: STKBT_PUBLISHER_QUEUE
+      type: string
+      value: stockbot-receiver
+      description: Stockbot publisher queue name
+
+websocket-service:
+  defines: runnable
+  metadata:
+    name: websocket-service
+    description: WebSocket service for real-time communication.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    websocket-service:
+      image: env-4291.registry.local/websocket-service:main-d8b7ecc
+      build: .
+      dockerfile: Dockerfile.websocket-service
+  services:
+    websocket-service-port:
+      description: WebSocket service listens on this port for incoming connections.
+      container: websocket-service
+      port: 8080
+      host-port: 8080
+      publish: true
+      protocol: tcp
+  connections:
+    websocket-to-chat-service:
+      target: go-chat/chat-service
+      service: chat-service-port
+      optional: true
+      description: >-
+        WebSocket service connects to the chat service for real-time
+        communication.
+  variables:
+    log-panic-trace:
+      env: LOG_PANIC_TRACE
+      type: bool
+      value: false
+      description: Determines if panic trace logs should be printed.
+
+stack:
+  defines: group
+  members:
+    - go-chat/rabbitmq-broker
+    - go-chat/mysql-database
+    - go-chat/chat-service
+    - go-chat/websocket-service
